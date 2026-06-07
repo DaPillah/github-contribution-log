@@ -1,9 +1,9 @@
 # Contribution #1: Add search filter/limit by date (e.g.: search X but show only conversations from last week/date/day/etc)
 
-**Contribution Number:** 1
-**Student:** Justin 
-**Issue:** [[GitHub issue link]](https://github.com/BasedHardware/omi/issues/4457)  
-**Status:** [Phase II] [In Progress]
+**Contribution Number:** 1  
+**Student:** Justin  
+**Issue:** [GitHub issue link](https://github.com/BasedHardware/omi/issues/4457)  
+**Status:** Phase II [In Progress]
 
 ---
 
@@ -23,7 +23,7 @@ There is currently no way to filter conversation search results by date. Users w
 
 ### Expected Behavior
 
-Users should be able to search their conversations with an optional date filter — for example, "show only results from last week" or within a specific date range — so results are limited to the relevant time period.
+Users should be able to search their conversations with an optional date filter (for example, "show only results from last week" or within a specific date range) so results are limited to the relevant time period.
 
 ### Current Behavior
 
@@ -31,9 +31,9 @@ Search returns all matching conversations regardless of when they occurred, maki
 
 ### Affected Components
 
-backend/utils/llm.py — where the retrieval and search logic lives
-backend/routers/ — where the API endpoint would need to accept date range parameters
-Pinecone — the vector database that stores conversations and would need to filter by date metadata
+backend/utils/llm.py — where the retrieval and search logic lives  
+backend/routers/ — where the API endpoint would need to accept date range parameters  
+Pinecone — the vector database that stores conversations and would need to filter by date metadata  
 
 ---
 
