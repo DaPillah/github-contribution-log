@@ -1,15 +1,17 @@
-# Contribution [#]: [Issue Title]
+# Contribution #1: Add search filter/limit by date (e.g.: search X but show only conversations from last week/date/day/etc)
 
-**Contribution Number:** [1 / 2 / 3]  
-**Student:** [Your Name]  
-**Issue:** [GitHub issue link]  
-**Status:** [Phase I / Phase II / Phase III / Phase IV] [In Progress / Complete]
+**Contribution Number:** 1
+**Student:** Justin 
+**Issue:** [[GitHub issue link]](https://github.com/BasedHardware/omi/issues/4457)  
+**Status:** [Phase II] [In Progress]
 
 ---
 
 ## Why I Chose This Issue
 
-[1-2 paragraphs explaining why this issue interests you, how it matches your skills/learning goals, what you hope to learn]
+I chose this issue because it is a well-scoped, backend-focused feature request that aligns with my existing experience working with filters on logs and data. Since the fix lives in the Python backend rather than the mobile app, it felt like an approachable entry point into a real-world codebase without being overwhelmed by unfamiliar mobile development tools.
+
+As a first-time open source contributor through CodePath, I wanted to work on something that would help me learn how search and retrieval logic works in a production AI application. This issue gives me the opportunity to understand how Omi stores and queries conversations, how API parameters get passed through a FastAPI backend, and how vector databases like Pinecone are used in practice.
 
 ---
 
@@ -17,19 +19,21 @@
 
 ### Problem Description
 
-[In your own words, what's broken or missing?]
+There is currently no way to filter conversation search results by date. Users who remember roughly when something happened but not the exact details have no way to narrow their search to a specific time window.
 
 ### Expected Behavior
 
-[What should happen?]
+Users should be able to search their conversations with an optional date filter — for example, "show only results from last week" or within a specific date range — so results are limited to the relevant time period.
 
 ### Current Behavior
 
-[What actually happens?]
+Search returns all matching conversations regardless of when they occurred, making it difficult to find something when the user only has a rough idea of the timeframe.
 
 ### Affected Components
 
-[Which parts of the codebase are involved?]
+backend/utils/llm.py — where the retrieval and search logic lives
+backend/routers/ — where the API endpoint would need to accept date range parameters
+Pinecone — the vector database that stores conversations and would need to filter by date metadata
 
 ---
 
