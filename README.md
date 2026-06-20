@@ -2,16 +2,16 @@
 
 **Contribution Number:** 1  
 **Student:** Justin  
-**Issue:** [GitHub issue link](https://github.com/BasedHardware/omi/issues/4457)  
+**Issue:** [GitHub issue link](https://github.com/astronomer/astronomer-cosmos/issues/2822)  
 **Status:** Phase II [In Progress]
 
 ---
 
 ## Why I Chose This Issue
 
-I chose this issue because it is a well-scoped, backend-focused feature request that aligns with my existing experience working with filters on logs and data. Since the fix lives in the Python backend rather than the mobile app, it felt like an approachable entry point into a real-world codebase without being overwhelmed by unfamiliar mobile development tools.
+I chose this issue because it involves improving error handling in a real production Python codebase used by data engineers working with dbt and Apache Airflow. As someone interested in data engineering and AI/ML workflows, working on Astronomer's Cosmos project gives me direct exposure to how production data pipelines handle failures and surface useful debugging information.
 
-As a first-time open source contributor through CodePath, I wanted to work on something that would help me learn how search and retrieval logic works in a production AI application. This issue gives me the opportunity to understand how Omi stores and queries conversations, how API parameters get passed through a FastAPI backend, and how vector databases like Pinecone are used in practice.
+As a first-time open source contributor through CodePath, I wanted to work on something that would teach me meaningful Python patterns. This issue specifically helps me learn how subprocess output is captured and surfaced in exception messages (a skill directly applicable to any backend Python work).
 
 ---
 
@@ -19,21 +19,20 @@ As a first-time open source contributor through CodePath, I wanted to work on so
 
 ### Problem Description
 
-There is currently no way to filter conversation search results by date. Users who remember roughly when something happened but not the exact details have no way to narrow their search to a specific time window.
+When Cosmos runs a dbt command via LoadMode.DBT_LS and it fails, the error message is often opaque (especially when both stdout and stderr appear empty) making it very difficult to diagnose why the command failed.
 
 ### Expected Behavior
 
-Users should be able to search their conversations with an optional date filter (for example, "show only results from last week" or within a specific date range) so results are limited to the relevant time period.
+When a dbt command fails, CosmosLoadDbtException should include the captured stdout, stderr, and process exit code in its message (even explicitly stating when no output was captured) so developers can quickly understand what went wrong.
 
 ### Current Behavior
 
-Search returns all matching conversations regardless of when they occurred, making it difficult to find something when the user only has a rough idea of the timeframe.
+The exception only shows Unable to run [... dbt ls ...] with little or no detail, leaving developers without enough information to debug the failure.
 
 ### Affected Components
 
-backend/utils/llm.py — where the retrieval and search logic lives  
-backend/routers/ — where the API endpoint would need to accept date range parameters  
-Pinecone — the vector database that stores conversations and would need to filter by date metadata  
+cosmos/dbt/graph.py — specifically the run_command  
+run_command_with_subprocess - functions where the exception is raised 
 
 ---
 
