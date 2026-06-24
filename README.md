@@ -1,4 +1,4 @@
-# Contribution #1: Surface dbt's stdout/stderr in CosmosLoadDbtException when the dbt command fails with no output #2822
+# Contribution #1: `Surface dbt's stdout/stderr in CosmosLoadDbtException when the dbt command fails with no output #2822`
 
 **Contribution Number:** 1  
 **Student:** Justin  
@@ -150,7 +150,9 @@ Result: **1701 passed, 18 skipped, 2 xfailed** — no regressions.
 ### Code Changes
 
 - **Files modified:** `cosmos/dbt/graph.py`, `tests/dbt/test_graph.py`
-- **Key commits:** [Link to your commit]
+- **Key commits:** 
+  - https://github.com/astronomer/astronomer-cosmos/pull/2826/changes/8eae902d8c10e6916f7d817b60ab99aa0bc6e787
+  - https://github.com/astronomer/astronomer-cosmos/pull/2826/changes/1ccb0fef0f3e1acebe551b0211faf46f61236c63
 - **Approach decisions:**
   - Changed to `returncode != 0` instead of adding a separate `None` check — cleaner and 
     semantically correct since `0` is the only valid success exit code for a subprocess
@@ -159,21 +161,40 @@ Result: **1701 passed, 18 skipped, 2 xfailed** — no regressions.
   - Updated `test_run_command` success cases to use `returncode=0` rather than `None` since 
     `0` is the real success exit code — `None` was only working before because it happened 
     to be falsy
-
-
+  - Added `stdout = stdout or "<no stdout captured>"` and `stderr = stderr or 
+    "<no stderr captured>"` fallbacks after `process.communicate()` per maintainer feedback 
+    — makes empty output explicit instead of rendering blank
+  - Normalized both error paths in `run_command_with_subprocess` to use the same format: 
+    `Exit code / stderr / stdout`
+  - Updated existing integration test regex patterns to match the new message format
+  - Added two new tests covering empty stderr and empty stdout scenarios per maintainer request
+    
 ---
 
 ## Pull Request
 
-**PR Link:** [GitHub PR URL when submitted]
+**PR Link:** https://github.com/astronomer/astronomer-cosmos/pull/2826
 
-**PR Description:** [Draft or final PR description - much of the content above can be adapted]
+**PR Description:** Include exit code, stderr, and stdout in all CosmosLoadDbtException 
+messages raised by run_command_with_subprocess. Also tighten the error-detection condition 
+from truthy-returncode to returncode != 0, so that a None exit code (undefined result) is 
+correctly treated as a failure rather than silently swallowed.
+
+Closes #2822
 
 **Maintainer Feedback:**
-- [Date]: [Summary of feedback received]
-- [Date]: [How you addressed it]
+- June 23, 2026: @tatiana requested four changes — (1) add explicit placeholders when 
+  stderr/stdout are empty, (2) normalize the error message format between both error paths 
+  in graph.py, (3) update integration test regex patterns to match the new message format, 
+  (4) add new pytest.raises test cases verifying the new error message format for both 
+  empty and non-empty stdout/stderr scenarios
+- June 24, 2026: Addressed all feedback — added `stdout or "<no stdout captured>"` and 
+  `stderr or "<no stderr captured>"` fallbacks, normalized both error paths to use the same 
+  format, updated existing test regexes, and added two new tests 
+  (test_run_command_surfaces_stderr_in_exception and 
+  test_run_command_surfaces_stdout_in_exception)
 
-**Status:** [Awaiting review / Iterating / Approved / Merged]
+**Status:** Awaiting review
 
 ---
 
