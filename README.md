@@ -132,16 +132,25 @@ all 1701 tests pass with 0 failures
       mistaken for an error
 - [x] `test_run_command[fail-599]`: verifies a non-zero exit code raises `CosmosLoadDbtException`
 - [x] `test_run_command[Error-None]`: verifies `"Error"` in stdout raises `CosmosLoadDbtException`
+- [x] `test_run_command_surfaces_stderr_in_exception`: verifies stderr content appears in the 
+      exception message and `<no stdout captured>` placeholder shows when stdout is empty
+- [x] `test_run_command_surfaces_stdout_in_exception`: verifies stdout content appears in the 
+      exception message and `<no stderr captured>` placeholder shows when stderr is empty
 
 ### Integration Tests
 
-- [ ] Not required for this change — no new behavior is introduced at the integration level
+- [x] `test_load_via_dbt_ls_with_non_zero_returncode`: updated regex to include `Exit code: 1` 
+      and `<no stdout captured>` to match new message format
+- [x] `test_load_via_dbt_ls_with_runtime_error_in_stdout`: updated regex to include `Exit code: .*` 
+      and `<no stderr captured>` to match new message format
+- [x] `test_load_via_dbt_ls_without_dbt_deps`: updated assertion from `==` to `startswith` 
+      since the message now includes variable exit code and stdout after the base message
 
 ### Manual Testing
 
 Ran the full `test_graph.py` test suite with 
 `hatch run tests.py3.11-2.10-1.9:test tests/dbt/test_graph.py`. 
-Result: **1701 passed, 18 skipped, 2 xfailed** — no regressions.
+Result: **1703 passed, 18 skipped, 2 xfailed** — no regressions.
 
 ---
 
@@ -153,6 +162,7 @@ Result: **1701 passed, 18 skipped, 2 xfailed** — no regressions.
 - **Key commits:** 
   - https://github.com/astronomer/astronomer-cosmos/pull/2826/changes/8eae902d8c10e6916f7d817b60ab99aa0bc6e787
   - https://github.com/astronomer/astronomer-cosmos/pull/2826/changes/1ccb0fef0f3e1acebe551b0211faf46f61236c63
+  - https://github.com/astronomer/astronomer-cosmos/pull/2826/changes/b017b3fd64e38fc7948b26b8aaf3b160188a8b8b
 - **Approach decisions:**
   - Changed to `returncode != 0` instead of adding a separate `None` check — cleaner and 
     semantically correct since `0` is the only valid success exit code for a subprocess
@@ -168,6 +178,9 @@ Result: **1701 passed, 18 skipped, 2 xfailed** — no regressions.
     `Exit code / stderr / stdout`
   - Updated existing integration test regex patterns to match the new message format
   - Added two new tests covering empty stderr and empty stdout scenarios per maintainer request
+  - Changed `test_load_via_dbt_ls_without_dbt_deps` assertion from `==` to `startswith` 
+    since the dbt_packages error message now appends variable exit code and stdout content 
+    that differs across CI environments
     
 ---
 
@@ -193,6 +206,14 @@ Closes #2822
   format, updated existing test regexes, and added two new tests 
   (test_run_command_surfaces_stderr_in_exception and 
   test_run_command_surfaces_stdout_in_exception)
+- June 29, 2026: @tatiana flagged remaining integration test failures from CI. Identified 
+  two separate issues:  
+  - (1) `test_load_via_dbt_ls_without_dbt_deps` was doing an exact 
+  string match on a message that now has exit code and stdout appended; fixed by changing 
+  `==` to `startswith`.  
+  - (2) Three `test_runner.py` failures are pre-existing CI 
+  infrastructure issues with `dbt.cli.main` not being available in that environment, 
+  unrelated to this PR's changes.
 
 **Status:** Awaiting review
 
