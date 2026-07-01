@@ -3,7 +3,7 @@
 **Contribution Number:** 1  
 **Student:** Justin  
 **Issue:** [GitHub issue link](https://github.com/astronomer/astronomer-cosmos/issues/2822)  
-**Status:** Phase IV [In Progress]
+**Status:** Phase IV [Merged ✅]
 
 ---
 
@@ -117,7 +117,7 @@ and added exit code to it.
 - No `Co-Authored-By` trailer for AI ✅
 
 **Evaluate:** Run `hatch run tests.py3.11-2.10-1.9:test tests/dbt/test_graph.py` and confirm 
-all 1701 tests pass with 0 failures
+all 1703 tests pass with 0 failures
 
 ---
 
@@ -181,7 +181,7 @@ Result: **1703 passed, 18 skipped, 2 xfailed** — no regressions.
   - Changed `test_load_via_dbt_ls_without_dbt_deps` assertion from `==` to `startswith` 
     since the dbt_packages error message now appends variable exit code and stdout content 
     that differs across CI environments
-    
+
 ---
 
 ## Pull Request
@@ -207,15 +207,14 @@ Closes #2822
   (test_run_command_surfaces_stderr_in_exception and 
   test_run_command_surfaces_stdout_in_exception)
 - June 29, 2026: @tatiana flagged remaining integration test failures from CI. Identified 
-  two separate issues:  
-  - (1) `test_load_via_dbt_ls_without_dbt_deps` was doing an exact 
-  string match on a message that now has exit code and stdout appended; fixed by changing 
-  `==` to `startswith`.  
-  - (2) Three `test_runner.py` failures are pre-existing CI 
-  infrastructure issues with `dbt.cli.main` not being available in that environment, 
-  unrelated to this PR's changes.
+  two separate issues:
+  - `test_load_via_dbt_ls_without_dbt_deps` was doing an exact string match on a message 
+    that now has exit code and stdout appended; fixed by changing `==` to `startswith`
+  - Three `test_runner.py` failures were pre-existing CI infrastructure issues with 
+    `dbt.cli.main` not being available in that environment, unrelated to this PR
 
-**Status:** Awaiting review
+**Status:** Merged ✅ — tatiana merged into `astronomer:main` on June 30, 2026.  
+144 checks passed. Code coverage: 98.44% (all modified lines covered).
 
 ---
 
@@ -223,20 +222,39 @@ Closes #2822
 
 ### Technical Skills Gained
 
-[What you learned technically]
+- How subprocess output (stdout, stderr, exit codes) is captured and surfaced in Python 
+  exception messages
+- How to read and follow contributing guidelines (`AGENTS.md`, `CLAUDE.md`) in a real 
+  production open source project
+- How hatch matrix environments work for running tests across multiple Python/Airflow versions
+- How CI pipelines work for external contributors and why integration tests require special 
+  permissions to run
+- How to iterate on a PR based on maintainer feedback. Responding to inline comments, 
+  pushing follow-up commits, and communicating clearly about what was changed and why
 
 ### Challenges Overcome
 
-[What was hard and how you solved it]
+- Understanding why `returncode = None` was treated as success by the original `if returncode or ...` 
+  condition — required tracing through Python's truthiness rules and subprocess behavior
+- Figuring out why the test mock needed `mock_popen.return_value.returncode = None` explicitly 
+  set. MagicMock auto-creates child mocks for unset attributes, which wouldn't format as `None`
+- Identifying which CI failures were caused by our changes vs pre-existing infrastructure issues
+- Understanding the difference between `git stash`, `git rebase`, and why commit order matters 
+  when syncing with a remote branch
 
 ### What I'd Do Differently Next Time
 
-[Reflection on your process]
+- Pull the latest `main` before starting each new round of changes to avoid diverged branch issues
+- Run the full test suite locally before pushing to catch integration test regressions earlier
+- Read `AGENTS.md` more carefully upfront (the hatch environment naming convention cost time 
+  to discover).
 
 ---
 
 ## Resources Used
 
-- [Link to helpful documentation]
-- [Tutorial or Stack Overflow post that helped]
-- [GitHub issues or discussions that helped]
+- [Astronomer Cosmos AGENTS.md](https://github.com/astronomer/astronomer-cosmos/blob/main/AGENTS.md)
+- [Issue #2822](https://github.com/astronomer/astronomer-cosmos/issues/2822)
+- [PR #2826](https://github.com/astronomer/astronomer-cosmos/pull/2826)
+- [Python subprocess docs](https://docs.python.org/3/library/subprocess.html)
+- [Python unittest.mock docs](https://docs.python.org/3/library/unittest.mock.html)
