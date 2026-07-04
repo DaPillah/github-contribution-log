@@ -1,6 +1,77 @@
-# Contribution #1: `Surface dbt's stdout/stderr in CosmosLoadDbtException when the dbt command fails with no output #2822`
+# My Open Source Contributions
+---
+---
 
-**Contribution Number:** 1  
+
+## Contribution #2: Default ModuleConfig args not captured in wandb config parameters #596
+**Student:** Justin  
+**Issue:** [GitHub issue link](https://github.com/ai2cm/ace/issues/596)
+**Status:** Phase I [In Progress]
+
+---
+
+## Why I Chose This Issue
+
+I chose this issue because it sits at the intersection of Python internals 
+and ML experiment tracking, which are two areas I want to build real skills in. 
+Unlike my first contribution which focused on error handling, this one 
+requires understanding how Python dataclasses handle default values and 
+how ML teams use Weights & Biases (wandb) to track model configs. It's 
+a meaningful step up that introduces me to research-grade ML codebases.
+
+---
+
+## Understanding the Issue
+
+### Problem Description
+
+When a ModuleConfig dataclass is logged to wandb, only values explicitly 
+set in the yaml config file are captured. Default field values defined in 
+the dataclass itself are silently omitted from the wandb config parameters.
+
+### Expected Behavior
+
+All config values (both explicitly set and default) should appear in 
+the wandb config so that experiment runs are fully reproducible and 
+comparable, even if defaults change in the future.
+
+### Current Behavior
+
+Only values written in the yaml file are logged to wandb. If a field 
+like `pad` has a default value in the dataclass but isn't mentioned in 
+the yaml, it won't appear in the wandb run overview at all.
+
+
+### Affected Components
+
+- `ModuleConfig` dataclass and its subclasses
+- The wandb config logging logic in the training pipeline
+- yaml serialization/deserialization utilities
+
+---
+
+## Reproduction Process
+
+### Environment Setup
+
+...
+
+### Steps to Reproduce
+
+1. 
+
+### Reproduction Evidence
+
+- **log:**  
+  
+- **My findings:** 
+  
+---
+---
+
+
+
+## Contribution #1: `Surface dbt's stdout/stderr in CosmosLoadDbtException when the dbt command fails with no output #2822` 
 **Student:** Justin  
 **Issue:** [GitHub issue link](https://github.com/astronomer/astronomer-cosmos/issues/2822)  
 **Status:** Phase IV [Merged ✅]
