@@ -6,7 +6,7 @@
 ## Contribution #2: Default ModuleConfig args not captured in wandb config parameters #596
 **Student:** Justin  
 **Issue:** [GitHub issue link](https://github.com/ai2cm/ace/issues/596)
-**Status:** Phase I [In Progress]
+**Status:** Phase III [In Progress]
 
 ---
 
@@ -53,18 +53,33 @@ the yaml, it won't appear in the wandb run overview at all.
 ## Reproduction Process
 
 ### Environment Setup
-
-...
+- Forked and cloned the ai2cm/ace repository
+- Created conda environment using `make create_environment`
+- Activated environment with `conda activate fme`
+- Installed pre-commit hooks with `pre-commit install`
+- Confirmed baseline tests pass with `make test_very_fast`
 
 ### Steps to Reproduce
-
-1. 
+1. Write a yaml config file for a ModuleConfig subclass that omits 
+   fields which have default values defined in the dataclass
+2. Run a training job that logs the config to wandb
+3. Open the wandb run overview and search for the omitted field (e.g. `pad`)
+4. Observe that the field is missing from the Config parameters section 
+   entirely, even though the model is actively using the default value
 
 ### Reproduction Evidence
+- **Log:** Maintainer-provided wandb run (private/restricted access):
+  https://wandb.ai/ai2cm/ace-samudra-cm4/runs/4nrk3kev/overview
+  Note: This run is not publicly accessible, but was referenced by the 
+  maintainer in the issue thread to demonstrate the missing default values.
 
-- **log:**  
-  
-- **My findings:** 
+- **My findings:** The bug originates from how wandb config is populated.
+  The raw yaml dict is logged directly, which only contains values the 
+  user explicitly wrote. Default values defined in the ModuleConfig 
+  dataclass are never written to yaml in the first place, so they are 
+  invisible to wandb. The fix is to instantiate the dataclass from the 
+  raw yaml first (which auto-populates defaults), convert it back to yaml, 
+  then log that to wandb instead.
   
 ---
 ---
