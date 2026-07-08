@@ -5,8 +5,8 @@
 
 ## Contribution #2: Default ModuleConfig args not captured in wandb config parameters #596
 **Student:** Justin  
-**Issue:** [GitHub issue link](https://github.com/ai2cm/ace/issues/596)
-**Status:** Phase III [In Progress]
+**Issue:** [GitHub issue link](https://github.com/ai2cm/ace/issues/596)   
+**Status:** Phase IV [In Progress]
 
 ---
 
@@ -80,6 +80,98 @@ the yaml, it won't appear in the wandb run overview at all.
   invisible to wandb. The fix is to instantiate the dataclass from the 
   raw yaml first (which auto-populates defaults), convert it back to yaml, 
   then log that to wandb instead.
+
+  ---
+
+## Solution Approach
+
+### Analysis
+
+`ModuleSelector` (`fme/core/registry/module.py`) is a dataclass that stores a network builder as `type: str` + `config: Mapping[str, Any]`, where `config` is the raw dict loaded from yaml. In `__post_init__` it builds the real `ModuleConfig` subclass into `self._instance` (this is where Python fills in defaults like `pad`). However:
+
+- `self._instance` is a plain attribute, **not** a dataclass field, so `dataclasses.asdict()` ignores it.
+- `self.config` **is** a field, so `asdict()` serializes it, but it is still the raw yaml dict, missing defaults.
+
+When a run is logged, the caller does `dataclasses.asdict(TrainConfig)` (`fme/ace/train/train.py`), which serializes the incomplete `self.config`. The fully-defaulted object exists but is never serialized. This is why defaults never reach wandb.
+
+### Proposed Solution
+
+Normalize `ModuleSelector.config` inside `__post_init__`: immediately after building `self._instance`, overwrite `self.config` with `dataclasses.asdict(self._instance)`. This replaces the raw yaml dict with the fully-defaulted version, so defaults are captured wherever the config is serialized (wandb, checkpoints, logs), not just wandb.
+
+### Implementation Plan
+
+Using the UMPIRE framework (adapted):
+
+- **Understand:** wandb only shows user-specified config values; `ModuleConfig` defaults are missing, which hurts reproducibility and run comparison. Reproduced via `SamudraBuilder.pad`.
+- **Match:** This is a serialization-gap problem. The repo already uses `dataclasses.asdict(selector.module_config)` elsewhere (`test_module_registry.py`), so the "instantiate → asdict" pattern is idiomatic here and known to serialize cleanly.
+- **Plan:**
+  1. Add a failing test: a mock builder with a default field; assert the default appears in `dataclasses.asdict(selector)["config"]`.
+  2. Fix `ModuleSelector.__post_init__` to normalize `self.config`.
+  3. Confirm the test goes red → green.
+  4. Run the registry and module-builder/step suites to check for regressions.
+  5. Run pre-commit (ruff, ruff-format, mypy).
+- **Implement:** One line added to `__post_init__` — `self.config = dataclasses.asdict(self._instance)` — plus a comment citing #596.
+- **Review:**
+  - Verified loading still works: `ModuleConfig.from_state` uses `dacite(strict=True)`, and every added key is a valid field, so both older (partial) and newer (full) configs load.
+  - Checkpoint backwards-compatibility tests (`test_frozen_module_backwards_compatibility`, `test_latest_module_backwards_compatibility`) still pass.
+- **Evaluate:** The fix is minimal (one line), addresses the root cause at the correct layer, and fixes all serialization consumers rather than patching wandb alone.
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+
+- Added `MockModuleBuilderWithDefault` (a `ModuleConfig` subclass with a required `param_shapes` field and a defaulted `pad: str = "reflect"` field) and `test_module_selector_config_includes_defaults` in `fme/core/registry/test_module_registry.py`. The test builds a `ModuleSelector` supplying only `param_shapes`, then asserts `dataclasses.asdict(selector)["config"]["pad"] == "reflect"`.
+- **Red before fix:** `KeyError: 'pad'` (default genuinely missing).
+- **Green after fix:** passes.
+
+### Integration Tests
+
+- Ran the full registry suite (`fme/core/registry/`): **8 passed**, including the frozen/latest checkpoint backwards-compatibility tests.
+- Ran the module-builder and step suites (`fme/ace/registry/`, `fme/core/step/test_step.py`, `fme/core/models/mlp/test_mlp.py`): **210 passed, 7 skipped** — no regressions.
+
+### Manual Testing
+
+I do not have access to the maintainer's private wandb project, so I verified at the serialization layer that produces the wandb config: constructing a `ModuleSelector` with only the required fields and confirming `dataclasses.asdict(selector)["config"]` now contains the default field (which `wandb.init(config=...)` ultimately receives). Also ran `pre-commit run --files ...` — ruff, ruff-format, and mypy all pass.
+
+---
+
+## Implementation Notes
+
+### Code Changes
+
+- **Files modified:**
+  - `fme/core/registry/module.py` — normalize `config` in `ModuleSelector.__post_init__`.
+  - `fme/core/registry/test_module_registry.py` — add mock builder with a default field and a failing-first test.
+- **Key commits:**
+  - `9d121dc1` — *Serialize ModuleConfig defaults in ModuleSelector.config* (fix + test together, one reviewable unit).
+- **Approach decisions:**
+  - Fixed in `ModuleSelector.__post_init__`, not in the wandb-logging code — by the time config reaches wandb it is a flattened, type-erased dict and the dataclass type needed to fill defaults is gone.
+  - Used `dataclasses.asdict()` because it is the pattern already used elsewhere in this module's tests and round-trips safely under `dacite(strict=True)`.
+  - Wrote the failing test first, per the repo's "add a failing test first" guideline.
+
+---
+
+## Pull Request
+
+**PR Link:** https://github.com/ai2cm/ace/pull/1350
+
+**PR Description:**
+
+When a run is logged to Weights & Biases, only the config values explicitly set in the yaml file were captured — default field values defined on the `ModuleConfig` dataclass were silently omitted, because `ModuleSelector` kept the raw yaml dict in its `config` field and never serialized the defaults Python fills in when the `ModuleConfig` is instantiated. This PR normalizes `ModuleSelector.config` to the built instance's fully-defaulted values so defaults are captured wherever the config is serialized.
+
+Changes:
+
+- `fme.core.registry.module.ModuleSelector.__post_init__`: set `self.config = dataclasses.asdict(self._instance)` after building the instance.
+- `fme.core.registry.test_module_registry`: add a mock builder with a default field and a test asserting the default appears in the serialized config.
+
+- [x] Tests added
+- [ ] If dependencies changed, "deps only" image rebuilt and `latest_deps_only_image.txt` updated
+
+Resolves #596
+
+
   
 ---
 ---
