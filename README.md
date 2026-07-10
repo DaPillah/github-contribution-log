@@ -6,7 +6,7 @@
 ## Contribution #2: Default ModuleConfig args not captured in wandb config parameters #596
 **Student:** Justin  
 **Issue:** [GitHub issue link](https://github.com/ai2cm/ace/issues/596)   
-**Status:** Phase IV [In Progress]
+**Status:** Phase IV [Merged ✅]
 
 ---
 
@@ -172,7 +172,49 @@ Changes:
 Resolves #596
 
 
-  
+**Maintainer Feedback:**
+- Reviewed and approved by maintainer **mcgibbon** with "LGTM" — approved on the first pass with no requested changes.
+- Maintainer enabled auto-merge (squash) and the PR merged once CI completed. **7 checks passed** (ruff, ruff-format, mypy, and the test suites).
+
+**Status:** Merged into `ai2cm:main` (squash-merged as commit `5ecc4d4`).
+
+---
+
+## Learnings & Reflections
+
+### Technical Skills Gained
+
+- **Reading a bug across abstraction layers.** Learned to trace data from the yaml config through dataclass instantiation, `dataclasses.asdict()` serialization, and finally into `wandb.init(config=...)` — and to identify which layer actually causes a symptom versus where the symptom is visible.
+- **Dataclass internals.** Understood the difference between a dataclass *field* (serialized by `dataclasses.asdict()`) and a plain instance attribute like `self._instance` (ignored by it), and how `__post_init__` is the right place to normalize state.
+- **The registry / plugin pattern.** Saw how `ModuleSelector` stores `type` + a raw `config` dict to defer choosing a concrete `ModuleConfig` subclass until runtime, and why that indirection is what dropped the defaults.
+- **Serialization round-tripping.** Confirmed a change is safe by reasoning about load compatibility (`dacite(strict=True)` accepting a fuller dict) rather than just checking that the write looked right.
+- **Professional git/PR workflow.** Failing-test-first (red → green), running `pre-commit` (ruff/ruff-format/mypy) before pushing, writing a clean commit message, amending a bad message with `git commit --amend -F`, and filling out a repo's PR template.
+
+### Challenges Overcome
+
+- **The fix was not where I first thought.** I initially believed the change belonged in `_configure_wandb` (the wandb-logging code). Investigation showed that by the time the config reaches there it is a flattened, type-erased dict — the dataclass type needed to fill defaults is already gone. The fix had to move up to `ModuleSelector`, the last place the type still exists.
+- **Verifying without access to the reporting environment.** I could not open the maintainer's private wandb run, so I verified at the serialization layer instead — asserting the default appears in `dataclasses.asdict(selector)["config"]`, which is exactly what `wandb.init` receives.
+- **Backwards-compatibility risk.** The repo flags checkpoint loading compatibility as critical. I had to reason through whether normalizing `config` could break loading, and confirm it via the frozen/latest backwards-compatibility tests.
+- **A git mishap.** Accidentally saved a mangled one-line commit message in vim; recovered cleanly with `git commit --amend -F <file>` since nothing had been pushed yet.
+
+### What I'd Do Differently Next Time
+
+- **Trace the data flow before assuming a fix location.** Confirming where the type information is lost *first* would have saved me from anchoring on the wandb file.
+- **Use a message file from the start** (`git commit -F`) for any multi-paragraph commit, to avoid terminal paste collapsing newlines.
+- **Ask about scope earlier.** My fix normalizes `config` for all consumers, not only wandb; I would raise that tradeoff in the PR description proactively (which I did here) or in the issue thread before implementing.
+
+---
+
+## Resources Used
+
+- GitHub issue [ai2cm/ace #596](https://github.com/ai2cm/ace/issues/596) and the maintainer's guidance in the thread.
+- The repository's `AGENTS.md` / `CLAUDE.md` for conventions (testing with `python -m pytest`, `pre-commit`, branch naming, commit rules, checkpoint backwards-compatibility policy, PR template).
+- Existing code as reference for idiomatic patterns: `fme/core/registry/module.py`, `fme/core/registry/registry.py`, `fme/ace/train/train.py`, and `fme/core/registry/test_module_registry.py` (which already used `dataclasses.asdict(selector.module_config)`).
+- Python docs for [`dataclasses`](https://docs.python.org/3/library/dataclasses.html) (`asdict`, `__post_init__`, fields vs. attributes).
+- The [`dacite`](https://github.com/konradhalas/dacite) library docs for `from_dict` / `strict` behavior.
+- [Weights & Biases docs](https://docs.wandb.ai/) for how `wandb.init(config=...)` records run configuration.
+
+
 ---
 ---
 
