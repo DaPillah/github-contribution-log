@@ -2,7 +2,233 @@
 ---
 ---
 
+## Contribution #3: Optional Suppression/Truncation of Command Responses in Log Files
+**Student:** Justin   
+**Issue:** [tektronix/tm_devices #396](https://github.com/tektronix/tm_devices/issues/396)   
+**Status:** Phase III Build [In Progress]
 
+---
+
+## Why I Chose This Issue
+
+I chose this issue because it involves working across multiple layers 
+of a real Python library, from the public-facing API down to where 
+commands are actually sent and responses are logged. Unlike my previous 
+two contributions which were more isolated changes, this one requires 
+understanding how the whole system fits together before making any edits.
+
+I was also drawn to it because it involves both adding a new config 
+option (following an existing pattern) and modifying how individual 
+command calls behave, which are two different kinds of changes that work together 
+to solve the same problem. That felt like a meaningful step up in 
+complexity.
+
+
+---
+
+## Understanding the Issue
+
+### Problem Description
+
+`tm_devices` logs every command it sends to an instrument and every response it receives. Responses
+are logged verbatim. Some SCPI/TSP queries (most notably `CURVe?`, which asks an oscilloscope for
+its full captured waveform) return **multiple megabytes to gigabytes** of data. Logging that
+response in full creates enormous log files that are slow/impossible to open and can exhaust disk
+space.
+
+*(Domain note: **SCPI** is the text command language for lab instruments; a query ends in `?` and
+returns data. `CURVe?` returns raw waveform samples, which is the big payload. **VISA/PyVISA** is the
+transport that moves the bytes; `tm_devices` wraps it and does the logging.)*
+
+### Expected Behavior
+
+The user should be able to limit how much of a response is written to the logs:
+1. A **per-command argument** to truncate/suppress the logged response for a single query call.
+2. A **global config option** (`log_response_max_length`) to truncate *all* logged responses to
+   *N* characters, following the existing `log_*` config convention.
+
+A truncated entry should still show the beginning of the response plus a clear marker, e.g.:
+`Response from 'CURVe?' >>  '#512500...' [... response log truncated]`
+
+### Current Behavior
+
+The response-logging calls in `pi_control.py` log the full response object with no length limit:
+
+```python
+_logger.log(
+    logging.INFO if self._verbose and verbose else logging.DEBUG,
+    "Response from %r >>  %r",
+    query,
+    response,          # <-- logged in full, however large
+)
+```
+
+There is no way (per call or globally) to cap the logged length.
+
+### Affected Components
+
+- `src/tm_devices/driver_mixins/device_control/pi_control.py`: the `query()`, `query_binary()`,
+  and `query_raw_binary()` methods, which contain the three "Response from …" log calls.
+  (`TSPControl` inherits these, so this one file covers both the SCPI and TSP paths.)
+- `src/tm_devices/helpers/logging.py`: `configure_logging()`, the single sink for all `log_*`
+  options.
+- `src/tm_devices/helpers/constants_and_dataclasses.py`: the `DMConfigOptions` dataclass that
+  defines every config option.
+- `src/tm_devices/tm_devices_config_schema.json` and `docs/configuration.md`: schema + docs for the
+  new option.
+
+---
+
+## Reproduction Process
+
+### Environment Setup
+- macOS (Darwin 24.4.0), Python 3.12.7, `uv`-managed virtual environment
+- `tm_devices` installed in editable/dev mode (version 3.6.1)
+- Simulated instrument backend via `pyvisa-sim` (the repo's `tests/sim_devices/devices.yaml`), so no
+  physical scope is required
+- Reproduction script `reproduce_396.py` (connects to a simulated MSO22, simulates a large `CURVe?`
+  waveform, logs to a file, and reports the file size)
+
+### Steps to Reproduce
+1. Configure `tm_devices` logging to a file (`log_file_level="DEBUG"`).
+2. Connect to a simulated MSO22 oscilloscope.
+3. Simulate `CURVe?` returning a large waveform (~400,000 sample values, ~1.6 MB).
+4. Call `scope.query("CURVe?")`.
+5. Inspect the resulting log file size and the `Response from 'CURVe?'` line.
+
+### Reproduction Evidence
+
+<img width="804" height="257" alt="Issue_397_Bug_Reproduction" src="https://github.com/user-attachments/assets/63523ce9-0d50-421a-a08d-f85f2d99d637" />
+
+- **Log (current behavior):** a *single* `CURVe?` query produced a **1,600,164-byte (≈1.56 MiB)**
+  log file, and the response line alone was **1,600,081 characters** long.
+
+- **My findings:**
+  - One large query inflated the log by ~1.6 MB; a real multi-gigabyte `CURVe?` scales that to
+    disk-filling sizes, exactly as the issue reports.
+  - All response logging funnels through **three methods in one file** (`pi_control.py`), and
+    because `TSPControl` subclasses `PIControl`, fixing that one file covers both SCPI and TSP.
+  - The library already forwards any `log_*` config option to `configure_logging()` automatically
+    (`device_manager.py`), so a new `log_response_max_length` option slots into the existing design
+    with no new plumbing.
+
+---
+
+## Solution Approach
+
+### Analysis
+
+Both requested features converge on the same point in the code, the moment a response is formatted
+for a log record inside `pi_control.py`. So the cleanest design is a single truncation helper used
+at all three response-log sites, fed by two inputs: a **per-call** argument (highest priority) and a
+**global** value stored by `configure_logging()` (fallback). The global value rides the existing
+`log_*` convention, so no new plumbing is needed.
+
+### Proposed Solution
+
+1. **Global option** `log_response_max_length` (`Optional[int]`, default `None` = no truncation, so
+   behavior is unchanged unless opted in). Validated as non-negative.
+2. **Per-command argument** `log_response_max_length: int | None = None` on `query()`,
+   `query_binary()`, and `query_raw_binary()`. `None` defers to the global value; an int overrides
+   for that call (`0` suppresses the response body entirely).
+3. A shared helper `truncate_response_for_logging()` that returns the response `repr`, truncated
+   with a ` [... response log truncated]` marker when it exceeds the applicable limit.
+
+### Implementation Plan
+
+Using the UMPIRE framework (adapted):
+
+- **Understand:** Responses are logged verbatim in `pi_control.py`; huge `CURVe?` payloads bloat
+  logs. Need per-command + global length limits, following the `log_*` config convention.
+- **Match:** Mirror the existing `log_*` options (dataclass field + `SchemaAnnotation` + docstring +
+  `__post_init__` validation), the singleton `configure_logging()` pattern, and the existing
+  `"Response from %r >>  …"` log calls.
+- **Plan:**
+  1. Add `log_response_max_length` to `DMConfigOptions` (+ non-negative validation).
+  2. Add the parameter to `configure_logging()`; store it in a module global; add
+     `get_log_response_max_length()` and `truncate_response_for_logging()`.
+  3. Add the per-command arg to the three query methods and call the helper at each response-log
+     site.
+  4. Update the JSON schema, `docs/configuration.md`, and the changelog.
+  5. Write tests: helper unit tests, global-config test, an integration test through a real
+     `query()`, and a validation test.
+- **Implement:** Completed on branch `issue-396-truncate-logged-responses` (10 files changed).
+- **Review:** `ruff check` and `ruff format --check` clean; changes match surrounding code style;
+  default behavior unchanged (backward-compatible).
+- **Evaluate:** Reproduction confirms the fix. The same `CURVe?` query now logs a 309-character
+  line instead of 1,600,081 (a ~4,000× smaller log entry), while the full response is still returned
+  to the caller. Full test suite: **861 passed**, 1 pre-existing environment failure (`test_afg3k`,
+  unrelated to logging).
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+
+…
+
+### Integration Tests
+
+- …
+
+### Manual Testing
+
+…
+
+---
+
+## Implementation Notes
+
+### Code Changes
+
+- **Files modified:**
+…
+- **Key commits:**
+  …
+- **Approach decisions:**
+  - …
+
+---
+
+## Pull Request
+
+**PR Link:** …
+
+**PR Description:**
+
+…
+
+Changes:
+
+…
+
+
+
+**Maintainer Feedback:**
+…
+
+**Status:** …
+
+---
+
+## Learnings & Reflections
+
+### Technical Skills Gained
+
+…
+
+### Challenges Overcome
+
+…
+
+### What I'd Do Differently Next Time
+
+…
+
+
+---
+---
 ## Contribution #2: Default ModuleConfig args not captured in wandb config parameters #596
 **Student:** Justin  
 **Issue:** [GitHub issue link](https://github.com/ai2cm/ace/issues/596)   
