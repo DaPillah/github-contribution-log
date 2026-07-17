@@ -5,7 +5,7 @@
 ## Contribution #3: Optional Suppression/Truncation of Command Responses in Log Files
 **Student:** Justin   
 **Issue:** [tektronix/tm_devices #396](https://github.com/tektronix/tm_devices/issues/396)   
-**Status:** Phase III Build [In Progress]
+**Status:** Phase IV: Submit and Iterate [In Progress]
 
 ---
 
@@ -166,15 +166,23 @@ Using the UMPIRE framework (adapted):
 
 ### Unit Tests
 
-…
+Added to `tests/test_logging.py` and `tests/test_config_parser.py`:
+
+- **`test_truncate_response_for_logging`** (parametrized) — verifies the core `truncate_response_for_logging()` helper across cases: no limit (full `repr` logged), limit longer than the response (no truncation), limit shorter than the response (truncated + `[... response log truncated]` marker appended), and a limit of `0` (response body suppressed, marker only).
+- **`test_configure_logging_response_max_length`** — verifies the global path: truncation disabled by default (`None`), the value is stored and retrievable via `get_log_response_max_length()` after `configure_logging(log_response_max_length=4)`, the global is applied when no per-call value is given, and a per-call value overrides the global.
+- **`test_invalid_log_response_max_length`** — verifies a negative value raises `ValueError`, while `0` and positive values are accepted.
 
 ### Integration Tests
 
-- …
+- **`test_query_response_log_truncation`** (in `tests/test_pi_device.py`) — an end-to-end test through a real `scope.query("*IDN?")` call against the simulated MSO22 backend. Confirms the per-command `log_response_max_length` argument truncates the logged response line for that call, and that without the argument (and no global limit) the full response is logged. The full response is still returned to the caller in both cases.
 
 ### Manual Testing
 
-…
+- Wrote a reproduction script (`reproduce_396.py`) that connects to a simulated MSO22 oscilloscope and issues a `CURVe?` query returning a ~1.6 MB waveform:
+  - **Before (clean `main`):** a single query produced a **1,600,081-character** log line / **~1.56 MiB** log file.
+  - **After (with `log_response_max_length`):** the same query logged a **309-character** line ending in `[... response log truncated]` — a ~4,000× reduction — while the full response was still returned.
+- Ran the full local check suite: `ruff check`, `ruff format --check`, `pylint`, `pyright` (0 errors), `mdformat` (pinned), schema-generation match, and the full `pytest` suite (**861 passed**; the single failure was a pre-existing, unrelated environment issue that also fails on clean `main`). Coverage was **100%** on all three changed source modules.
+- Confirmed CI independently: **pre-commit.ci passed** (the full pinned hook set), **CodeFactor passed**, and all three commits show as **Verified**.
 
 ---
 
@@ -183,32 +191,53 @@ Using the UMPIRE framework (adapted):
 ### Code Changes
 
 - **Files modified:**
-…
+  - `src/tm_devices/helpers/constants_and_dataclasses.py` — added the `log_response_max_length` config option (`Optional[int]`) + non-negative validation
+  - `src/tm_devices/helpers/logging.py` — added the `configure_logging()` parameter, module-level storage, `get_log_response_max_length()`, and the `truncate_response_for_logging()` helper
+  - `src/tm_devices/helpers/__init__.py` — exported the two new helpers
+  - `src/tm_devices/driver_mixins/device_control/pi_control.py` — added the per-command `log_response_max_length` argument to `query()`, `query_binary()`, and `query_raw_binary()`, and applied truncation at the three response-log sites
+  - `src/tm_devices/tm_devices_config_schema.json` — added the schema entry for the new option
+  - `tests/test_logging.py`, `tests/test_pi_device.py`, `tests/test_config_parser.py` — tests
+  - `docs/configuration.md`, `CHANGELOG.md` — documentation
+
 - **Key commits:**
-  …
+  - `e5f492e` — `feat: add log_response_max_length option to truncate logged responses`
+  - `ed15de0` — `test: add tests for log_response_max_length option and argument`
+  - `9a72a37` — `docs: document log_response_max_length configuration option`
+
 - **Approach decisions:**
-  - …
+  - Both features converge on one truncation helper used at all three response-log sites in `pi_control.py`, keeping the logic in a single place (and covering both SCPI and TSP, since `TSPControl` subclasses `PIControl`).
+  - The global option follows the library's existing `log_*` naming convention, so it is automatically forwarded to `configure_logging()` by the DeviceManager — no new config plumbing needed.
+  - Per-command semantics: `None` (default) defers to the global setting; an integer overrides it for that call (`0` suppresses the response body). This makes the argument additive and unambiguous.
+  - The limit is measured in characters of the logged `repr`, matching the issue's "N characters" wording and working uniformly for `str`, `bytes`, and numeric-list responses.
+  - Default `None` = no truncation, so existing behavior is fully backward-compatible; the log format placeholder changed from `%r` to `%s`, but the helper returns the same `repr` string when no limit applies, so default log output is byte-for-byte identical.
 
 ---
 
 ## Pull Request
 
-**PR Link:** …
+**PR Link:** https://github.com/tektronix/tm_devices/pull/606
 
 **PR Description:**
 
-…
+Adds two ways to cap how many characters of a command response are written to the logs, resolving the risk of multi-gigabyte responses (e.g. an oscilloscope's `CURVe?`) creating unmanageable log files:
+
+1. A **global config option** `log_response_max_length` (`Optional[int]`, default `None`) that truncates all logged responses to N characters, following the existing `log_*` config convention.
+2. A **per-command argument** `log_response_max_length` on `query()`, `query_binary()`, and `query_raw_binary()` that truncates the logged response for a single call (`None` defers to the global; an int overrides; `0` suppresses).
+
+Truncated entries keep the start of the response and append `[... response log truncated]`. The full response is always still returned to the caller. Addresses #396.
 
 Changes:
 
-…
-
-
+- New global config option + validation
+- New per-command argument on the three query methods
+- Shared truncation helper in the logging module
+- Schema, documentation, and changelog updates
+- Unit + integration tests, 100% coverage on changed modules
 
 **Maintainer Feedback:**
-…
+_None yet — PR opened 2026-07-17, awaiting review._
 
-**Status:** …
+**Status:** Open — CLA signed; pre-commit.ci, CodeFactor, and reviewer auto-assignment passing; commits verified; docs build pending; full test workflow awaiting first-time-contributor approval from a maintainer.
 
 ---
 
